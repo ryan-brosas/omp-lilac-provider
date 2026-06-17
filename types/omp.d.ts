@@ -134,7 +134,7 @@ declare module "@oh-my-pi/pi-coding-agent" {
   interface ProviderConfig {
     name: string;
     baseUrl: string;
-    apiKey: string;
+    apiKey?: string;
     api: string;
     models: ModelInfo[];
     oauth?: unknown;

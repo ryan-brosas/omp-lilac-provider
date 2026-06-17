@@ -218,6 +218,23 @@ const CACHE_PATH = path.join(CACHE_DIR, `${PROVIDER_ID}-models.json`);
 const DISCOUNT_CACHE_PATH = path.join(CACHE_DIR, `${PROVIDER_ID}-discounts.json`);
 const LIVE_FETCH_TIMEOUT_MS = 8000;
 
+/**
+ * Resolve an API key from the LILAC_API_KEY env var.
+ * Returns undefined when unset/empty so the provider registration omits the
+ * apiKey field and OMP falls back to the OAuth credential stored via /login.
+ * Setting apiKey to a placeholder like "$LILAC_API_KEY" when the env var is
+ * unset causes OMP to send an empty key at request time, which Lilac's
+ * /v1/chat/completions endpoint rejects with 401 authentication_failed.
+ */
+function resolveLilacApiKey(): string | undefined {
+  const envKey = process.env.LILAC_API_KEY?.trim();
+  return envKey && envKey.length > 0 ? envKey : undefined;
+}
+
+// Resolved once at module load. When unset, registerProvider omits apiKey so
+// OMP uses the OAuth credential stored via /login instead of sending an empty key.
+const envApiKey = resolveLilacApiKey();
+
 // ─── OAuth (/login support) ──────────────────────────────────────────────────
 
 interface LilacOAuthCredentials {
@@ -240,16 +257,28 @@ function makeStaticCredentials(apiKey: string): LilacOAuthCredentials {
 }
 
 async function validateLilacApiKey(apiKey: string, signal?: AbortSignal): Promise<void> {
-  const response = await fetch(MODELS_URL, {
-    headers: { Authorization: `Bearer ${apiKey}` },
+  // Lilac's /v1/models and /status endpoints accept ANY token (even empty),
+  // so they cannot distinguish valid from invalid keys. Only /v1/chat/completions
+  // enforces authentication. Probe it with a minimal 1-token request.
+  const response = await fetch(`${BASE_URL}/chat/completions`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "moonshotai/kimi-k2.6",
+      messages: [{ role: "user", content: "ping" }],
+      max_tokens: 1,
+    }),
     signal,
   });
   if (response.ok) return;
 
   let message = `Lilac API key rejected (${response.status} ${response.statusText})`;
   try {
-    const body = (await response.json()) as { error?: { message?: string }; message?: string };
-    message = body.error?.message ?? body.message ?? message;
+    const body = (await response.json()) as { error_message?: string; message?: string; error?: { message?: string } };
+    message = body.error_message ?? body.error?.message ?? body.message ?? message;
   } catch {
     // Keep the status-derived message.
   }
@@ -553,7 +582,7 @@ export default function (pi: ExtensionAPI) {
   pi.registerProvider("lilac", {
     name: "Lilac",
     baseUrl: BASE_URL,
-    apiKey: "$LILAC_API_KEY",
+    ...(envApiKey ? { apiKey: envApiKey } : {}),
     api: "openai-completions",
     models: staleModels,
     oauth: lilacOauth,
@@ -618,7 +647,7 @@ export default function (pi: ExtensionAPI) {
           pi.registerProvider("lilac", {
             name: "Lilac",
             baseUrl: BASE_URL,
-            apiKey: "$LILAC_API_KEY",
+            ...(envApiKey ? { apiKey: envApiKey } : {}),
             api: "openai-completions",
             models: applyDiscounts(buildModels(merged, customModels, patches), latestDiscounts),
             oauth: lilacOauth,
@@ -627,7 +656,7 @@ export default function (pi: ExtensionAPI) {
           pi.registerProvider("lilac", {
             name: "Lilac",
             baseUrl: BASE_URL,
-            apiKey: "$LILAC_API_KEY",
+            ...(envApiKey ? { apiKey: envApiKey } : {}),
             api: "openai-completions",
             models: applyDiscounts(buildModels(staleBase, customModels, patches), latestDiscounts),
             oauth: lilacOauth,
@@ -682,7 +711,7 @@ export default function (pi: ExtensionAPI) {
     pi.registerProvider("lilac", {
       name: "Lilac",
       baseUrl: BASE_URL,
-      apiKey: "$LILAC_API_KEY",
+      ...(envApiKey ? { apiKey: envApiKey } : {}),
       api: "openai-completions",
       models: applyDiscounts(buildModels(base, customModels, patches), discounts),
       oauth: lilacOauth,

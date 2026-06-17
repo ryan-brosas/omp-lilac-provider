@@ -460,9 +460,9 @@ assert(typeof oauthProvider.login === "function", "oauth.login is a function");
 assert(typeof oauthProvider.refreshToken === "function", "oauth.refreshToken is a function");
 assert(typeof oauthProvider.getApiKey === "function", "oauth.getApiKey is a function");
 
-// loginLilac validates against GET /models then returns static credentials.
+// loginLilac validates against POST /chat/completions then returns static credentials.
 globalThis.fetch = mockFetch({
-  "/models": { status: 200, body: [{ id: "moonshotai/kimi-k2.6" }] },
+  "/chat/completions": { status: 200, body: { id: "chatcmpl-test", choices: [{ message: { role: "assistant", content: "ok" } }] } },
 });
 
 const enteredKey = "test-lilac-key-123";
@@ -490,8 +490,8 @@ try {
 }
 assert(emptyRejected, "empty key throws");
 
-// Invalid key (non-200 from /models) is rejected with a status-derived message.
-globalThis.fetch = mockFetch({ "/models": { status: 401, body: { error: { message: "bad key" } } } });
+// Invalid key (non-200 from /chat/completions) is rejected with a status-derived message.
+globalThis.fetch = mockFetch({ "/chat/completions": { status: 401, body: { error_message: "bad key" } } });
 let badKeyRejected = false;
 let badKeyMessage = "";
 try {
