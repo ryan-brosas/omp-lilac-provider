@@ -71,12 +71,14 @@
  */
 
 import type { ExtensionAPI, ModelRegistry } from "@oh-my-pi/pi-coding-agent";
-import modelsData from "./models.json" with { type: "json" };
-import customModelsData from "./custom-models.json" with { type: "json" };
-import patchData from "./patch.json" with { type: "json" };
+import { readFileSync } from "node:fs";
 import fs from "fs";
 import os from "os";
 import path from "path";
+
+function loadJson<T>(relativePath: string): T {
+  return JSON.parse(readFileSync(new URL(relativePath, import.meta.url), "utf8")) as T;
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -514,11 +516,10 @@ async function resolveApiKey(modelRegistry: ModelRegistry): Promise<void> {
 }
 
 // ─── Extension Entry Point ────────────────────────────────────────────────────
-
 export default function (pi: ExtensionAPI) {
-  const embeddedModels = modelsData as JsonModel[];
-  const customModels = customModelsData as JsonModel[];
-  const patches = patchData as PatchData;
+  const embeddedModels = loadJson<JsonModel[]>("models.json");
+  const customModels = loadJson<JsonModel[]>("custom-models.json");
+  const patches = loadJson<PatchData>("patch.json");
 
   const staleBase = loadStaleModels(embeddedModels);
   latestDiscounts = loadCachedDiscounts();
