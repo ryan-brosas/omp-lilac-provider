@@ -1,0 +1,63 @@
+{
+  "bead_id": "omp-lilac-models-command-w6s",
+  "type": "feature",
+  "priority": 2,
+  "estimate_minutes": 60,
+  "requirements": [
+    {
+      "id": 1,
+      "text": "Register /lilac-models slash command in OMP",
+      "priority": "MUST",
+      "acceptance": "Typing /lilac-models triggers the handler and displays model table"
+    },
+    {
+      "id": 2,
+      "text": "/lilac models (space-separated alias) also works",
+      "priority": "SHOULD",
+      "acceptance": "Typing /lilac models triggers same handler"
+    },
+    {
+      "id": 3,
+      "text": "Table shows all available Lilac models with name, pricing, supply, vision, context",
+      "priority": "MUST",
+      "acceptance": "All 4+ models appear in formatted table"
+    },
+    {
+      "id": 4,
+      "text": "Pricing reflects active subscription discounts",
+      "priority": "MUST",
+      "acceptance": "Discounted costs match footer status numbers"
+    },
+    {
+      "id": 5,
+      "text": "Active model is visually highlighted",
+      "priority": "SHOULD",
+      "acceptance": "Currently selected Lilac model is marked with indicator"
+    },
+    {
+      "id": 6,
+      "text": "Command works with stale (cached/embedded) models before API fetch completes",
+      "priority": "MUST",
+      "acceptance": "Table displays immediately without waiting for live API"
+    },
+    {
+      "id": 7,
+      "text": "TypeScript compiles with zero errors",
+      "priority": "MUST",
+      "acceptance": "npx tsc --noEmit exits 0"
+    },
+    {
+      "id": 8,
+      "text": "All existing tests pass",
+      "priority": "MUST",
+      "acceptance": "npm test passes 12/12"
+    }
+  ],
+  "success_criteria": [
+    "/lilac-models displays a formatted table of all Lilac models with pricing, supply, vision, and context window",
+    "Active Lilac model is visually highlighted in the table",
+    "Discounted pricing matches footer status bar numbers",
+    "npx tsc --noEmit exits 0 with no errors",
+    "npm test passes all 12 tests"
+  ]
+}

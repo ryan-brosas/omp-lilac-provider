@@ -1,0 +1,3 @@
+[2026-06-18] Bead created: omp-lilac-models-command-w6s
+[2026-06-18] PRD written: /lilac models slash command with supply-aware model browser
+[2026-06-18] Decisions documented: widget display, command naming, module-level model storage
