@@ -27,3 +27,6 @@ npm-debug.log*
 
 # bv (beads viewer) local config and caches
 .bv/
+
+# git worktrees (per-bead isolated workspaces)
+.worktrees/

@@ -1,0 +1,2 @@
+[2026-06-17] Bead created: omp-omp-daily-model-update-workflow-wdu
+[2026-06-18] Artifacts generated: prd.md, prd.json, decisions.md — bead existed but had no artifacts

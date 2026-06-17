@@ -235,7 +235,7 @@ function resolveLilacApiKey(): string | undefined {
 // OMP uses the OAuth credential stored via /login instead of sending an empty key.
 const envApiKey = resolveLilacApiKey();
 
-// ─── OAuth (/login support) ──────────────────────────────────────────────────
+// ─── API-Key Login (/login support) ───────────────────────────────────────────
 
 interface LilacLoginCallbacks {
   onPrompt(prompt: { message: string; placeholder?: string; allowEmpty?: boolean }): Promise<string>;

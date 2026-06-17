@@ -1,0 +1,70 @@
+{
+  "bead_id": "omp-omp-daily-model-update-workflow-wdu",
+  "type": "feature",
+  "priority": 2,
+  "title": "Add daily model-update GitHub Actions workflow",
+  "estimate_minutes": 45,
+  "labels": ["automation", "ci", "models"],
+  "requirements": [
+    {
+      "id": 1,
+      "requirement": "Daily scheduled run via cron trigger",
+      "priority": "MUST",
+      "acceptance": "Workflow triggers on schedule: cron(0 8 * * *)"
+    },
+    {
+      "id": 2,
+      "requirement": "Fetch latest models from Lilac API",
+      "priority": "MUST",
+      "acceptance": "npm run update-models executes successfully"
+    },
+    {
+      "id": 3,
+      "requirement": "Detect file changes",
+      "priority": "MUST",
+      "acceptance": "git diff --exit-code on models.json and README.md"
+    },
+    {
+      "id": 4,
+      "requirement": "Auto-commit changes",
+      "priority": "MUST",
+      "acceptance": "If changes detected, commit with descriptive message including date"
+    },
+    {
+      "id": 5,
+      "requirement": "Create PR for review",
+      "priority": "MUST",
+      "acceptance": "PR opened against main with model diff summary in body"
+    },
+    {
+      "id": 6,
+      "requirement": "Handle API key securely",
+      "priority": "MUST",
+      "acceptance": "LILAC_API_KEY read from GitHub Secrets, never echoed in logs"
+    },
+    {
+      "id": 7,
+      "requirement": "Handle API failures gracefully",
+      "priority": "SHOULD",
+      "acceptance": "Non-zero exit on API failure, workflow marked failed, no stale PR"
+    },
+    {
+      "id": 8,
+      "requirement": "Manual dispatch support",
+      "priority": "SHOULD",
+      "acceptance": "workflow_dispatch trigger for ad-hoc runs"
+    }
+  ],
+  "success_criteria": [
+    ".github/workflows/update-models.yml exists and is valid YAML",
+    "Workflow runs on schedule (verified after first scheduled run)",
+    "When models change, a PR is opened against main",
+    "When no models change, no PR is created",
+    "LILAC_API_KEY secret is not exposed in logs"
+  ],
+  "files": {
+    "create": [".github/workflows/update-models.yml"],
+    "modify": [],
+    "reference": ["scripts/update-models.js", "models.json", "README.md", ".github/workflows/ci.yml"]
+  }
+}
