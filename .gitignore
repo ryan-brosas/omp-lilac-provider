@@ -24,3 +24,6 @@ Thumbs.db
 *.log
 npm-debug.log*
 .pi/
+
+# bv (beads viewer) local config and caches
+.bv/

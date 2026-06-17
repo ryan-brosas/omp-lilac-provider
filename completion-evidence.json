@@ -1,0 +1,19 @@
+{
+  "bead_id": "omp-chore-add-typescript-ci-aq3",
+  "status": "verified",
+  "timestamp": "2026-06-18T02:45:00Z",
+  "verification_commands": [
+    "npx tsc --noEmit → exit 0, zero errors",
+    "npm run typecheck → exit 0",
+    "node scripts/test-discounts.ts → All tests passed (12/12)",
+    "npm test → All tests passed (12/12)"
+  ],
+  "requirements_met": {
+    "tsconfig.json with strict mode": "PASS — tsc --noEmit exits 0 with no errors; strict: true, target ES2022, module NodeNext",
+    "typecheck package.json script": "PASS — npm run typecheck runs tsc --noEmit and exits 0",
+    "Fix all strict-mode type errors": "PASS — Zero type errors in index.ts, scripts/test-discounts.ts; added types/omp.d.ts with OMP type declarations; typed all handler params, transformApiModel, mockFetch, and DimStatus",
+    "CI workflow on push/PR": "PASS — .github/workflows/ci.yml triggers on push + pull_request to main with checkout → setup node 22 → npm ci → tsc → test",
+    "CI runs on Node 22+": "PASS — actions/setup-node@v4 with node-version: 22",
+    "Tests pass in CI": "PASS — node scripts/test-discounts.ts exits 0 locally; workflow runs same command"
+  }
+}

@@ -9,6 +9,7 @@
     "build": "echo 'nothing to build'",
     "check": "echo 'nothing to check'",
     "test": "node scripts/test-discounts.ts",
+    "typecheck": "tsc --noEmit",
     "update-models": "node scripts/update-models.js"
   },
   "keywords": [
@@ -37,5 +38,12 @@
     "extensions": [
       "./index.ts"
     ]
+  },
+  "dependencies": {
+    "@honcho-ai/sdk": "^2.1.2"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.3",
+    "typescript": "^6.0.3"
   }
 }

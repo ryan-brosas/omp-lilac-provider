@@ -70,7 +70,21 @@
  * Then use /model to select from available models
  */
 
-import type { ExtensionAPI, ModelRegistry } from "@oh-my-pi/pi-coding-agent";
+import type {
+  ExtensionAPI,
+  ModelRegistry,
+  ModelInfo,
+  SessionStartContext,
+  TurnEndContext,
+  BeforeProviderRequestContext,
+  ModelSelectContext,
+  ModelSelectEvent,
+  SessionTreeContext,
+  MessageEndEvent,
+  MessageEndContext,
+  MessageEndResult,
+  MessageBlock,
+} from "@oh-my-pi/pi-coding-agent";
 import { readFileSync } from "node:fs";
 import fs from "fs";
 import os from "os";
@@ -266,15 +280,26 @@ const lilacOauth = {
   },
 };
 
+/** Raw model shape returned by Lilac /v1/models API. */
+interface LilacApiModel {
+  id: string;
+  name?: string;
+  supported_features?: string[];
+  architecture?: { input_modalities?: string[] };
+  pricing?: { prompt?: string | number; completion?: string | number; input_cache_read?: string | number };
+  context_length?: number;
+  top_provider?: { max_completion_tokens?: number };
+}
+
 /** Transform a model from the Lilac /v1/models API. Lilac returns rich metadata. */
-function transformApiModel(apiModel: any): JsonModel | null {
+function transformApiModel(apiModel: LilacApiModel): JsonModel | null {
   const features: string[] = apiModel.supported_features || [];
   const modalities = apiModel.architecture?.input_modalities || [];
   const hasImage = modalities.includes("image");
   const pricing = apiModel.pricing || {};
 
   // Lilac API returns per-token pricing (e.g. "0.0000007" = $0.70/M tokens)
-  const toPerM = (v: any) => Math.round((typeof v === "string" ? parseFloat(v) : (v || 0)) * 1_000_000 * 100) / 100;
+  const toPerM = (v: unknown) => Math.round((typeof v === "string" ? parseFloat(v) : (v as number || 0)) * 1_000_000 * 100) / 100;
 
   const inputTypes: string[] = ["text"];
   if (hasImage) inputTypes.push("image");
@@ -477,7 +502,7 @@ function formatDiscountStatus(modelId?: string): string {
   return `supply: ${discount.supplyState} · sub-discount: ${discount.discountPercent}%`;
 }
 
-function dimStatus(ctx: any, text: string): string {
+function dimStatus(ctx: { ui: { theme: { fg: (color: string, text: string) => string } } }, text: string): string {
   try {
     return ctx.ui.theme.fg("dim", text);
   } catch {
@@ -543,7 +568,7 @@ export default function (pi: ExtensionAPI) {
     creditMultiplier: number;
   }
 
-  function replayDiscountEvents(ctx: any): void {
+  function replayDiscountEvents(ctx: { sessionManager: { getBranch(): Array<{ type: string; customType?: string; data?: unknown }> } }): void {
     latestDiscounts = loadCachedDiscounts() ?? new Map();
     for (const entry of ctx.sessionManager.getBranch()) {
       if (entry.type === "custom" && entry.customType === DISCOUNT_ENTRY_TYPE && entry.data) {
@@ -557,7 +582,7 @@ export default function (pi: ExtensionAPI) {
     }
   }
 
-  pi.on("session_start", async (_event, ctx) => {
+  pi.on("session_start", async (_event: unknown, ctx: SessionStartContext) => {
     revalidateAbort?.abort();
     revalidateAbort = new AbortController();
     const signal = revalidateAbort.signal;
@@ -616,7 +641,7 @@ export default function (pi: ExtensionAPI) {
     });
   });
 
-  pi.on("turn_end", async (_event, ctx) => {
+  pi.on("turn_end", async (_event: unknown, ctx: TurnEndContext) => {
     if (!ctx.model || ctx.model.provider !== "lilac" || !latestDiscounts) return;
     const discount = latestDiscounts.get(ctx.model.id);
     if (!discount) return;
@@ -628,7 +653,7 @@ export default function (pi: ExtensionAPI) {
     } as DiscountEntry);
   });
 
-  pi.on("before_provider_request", async (_event, ctx) => {
+  pi.on("before_provider_request", async (_event: unknown, ctx: BeforeProviderRequestContext) => {
     if (ctx.model?.provider !== "lilac") return;
 
     // Always show status for active lilac model
@@ -665,7 +690,7 @@ export default function (pi: ExtensionAPI) {
     ctx.ui.setStatus("lilac", dimStatus(ctx, formatDiscountStatus(ctx.model.id)));
   });
 
-  pi.on("model_select", async (event, ctx) => {
+  pi.on("model_select", async (event: ModelSelectEvent, ctx: ModelSelectContext) => {
     if (event.model.provider === "lilac") {
       ctx.ui.setStatus("lilac", dimStatus(ctx, formatDiscountStatus(event.model.id)));
     } else {
@@ -673,7 +698,7 @@ export default function (pi: ExtensionAPI) {
     }
   });
 
-  pi.on("session_tree", async (_event, ctx) => {
+  pi.on("session_tree", async (_event: unknown, ctx: SessionTreeContext) => {
     replayDiscountEvents(ctx);
     const model = ctx.model;
     if (model?.provider === "lilac") {
@@ -687,7 +712,7 @@ export default function (pi: ExtensionAPI) {
   // blocks to execute, so the agent loop ends with nothing to do ("abrupt stop").
   // The message_end handler converts this to a retryable error so omp's auto-retry
   // mechanism re-prompts the agent.
-  pi.on("message_end", async (event, mctx) => {
+  pi.on("message_end", async (event: MessageEndEvent, mctx: MessageEndContext): Promise<MessageEndResult> => {
     const message = event.message;
     if (message.role !== "assistant") return;
     if (message.provider !== "lilac" && mctx.model?.provider !== "lilac") return;
@@ -695,7 +720,7 @@ export default function (pi: ExtensionAPI) {
 
     const content = message.content;
     const hasToolCalls = Array.isArray(content) &&
-      content.some((block: any) => block.type === "toolCall");
+      content.some((block: MessageBlock) => block.type === "toolCall");
 
     if (hasToolCalls) return;
 

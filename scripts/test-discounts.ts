@@ -26,7 +26,8 @@ process.env.HOME = tmpHome;
 const originalFetch = globalThis.fetch;
 
 function mockFetch(responses: Record<string, { status?: number; body?: unknown }>) {
-  return async (url: string, _init?: RequestInit) => {
+  return async (input: URL | RequestInfo, _init?: RequestInit): Promise<Response> => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
     for (const [pattern, response] of Object.entries(responses)) {
       if (url.includes(pattern)) {
         return new Response(JSON.stringify(response.body ?? {}), {
@@ -121,7 +122,7 @@ const models = [
 ] as any[];
 const applied = applyDiscounts(models, discounts);
 assert(applied[0].discount != null, "gemma has discount field");
-assert(applied[0].discount.discountPercent === 25, "gemma discount attached correctly");
+assert(applied[0].discount!.discountPercent === 25, "gemma discount attached correctly");
 // credit_multiplier 0.75 means pay 75% of list price
 assert(applied[0].cost.input === 0.0825, "gemma input cost = 0.11 * 0.75 = 0.0825");
 assert(applied[0].cost.output === 0.2625, "gemma output cost = 0.35 * 0.75 = 0.2625");
@@ -331,10 +332,10 @@ for (const handler of handlers.get("turn_end") || []) {
 assert(appendedEntries.length > 0, "at least one entry was appended");
 const discountEntry = appendedEntries.find(e => e.customType === "lilac-discount");
 assert(discountEntry != null, "lilac-discount entry was appended");
-assert(discountEntry.data.modelId === "moonshotai/kimi-k2.6", "entry has correct modelId");
-assert(discountEntry.data.discountPercent === 25, "entry has correct discountPercent");
-assert(discountEntry.data.creditMultiplier === 0.75, "entry has correct creditMultiplier");
-assert(discountEntry.data.supplyState === "healthy", "entry has correct supplyState");
+assert(discountEntry!.data.modelId === "moonshotai/kimi-k2.6", "entry has correct modelId");
+assert(discountEntry!.data.discountPercent === 25, "entry has correct discountPercent");
+assert(discountEntry!.data.creditMultiplier === 0.75, "entry has correct creditMultiplier");
+assert(discountEntry!.data.supplyState === "healthy", "entry has correct supplyState");
 
 // ─── Test 10: formatDiscountStatus fallbacks ───────────────────────────────────
 
@@ -411,6 +412,7 @@ const changedDiscounts = new Map([
 
 const reRegisterModels = applyDiscounts(freshModels, changedDiscounts);
 mockApi.registerProvider("lilac", {
+  name: "Lilac",
   baseUrl: "https://api.getlilac.com/v1",
   apiKey: "$LILAC_API_KEY",
   api: "openai-completions",
@@ -431,6 +433,7 @@ const reRegisterModels2 = applyDiscounts(
   sessionDiscounts,
 );
 mockApi.registerProvider("lilac", {
+  name: "Lilac",
   baseUrl: "https://api.getlilac.com/v1",
   apiKey: "$LILAC_API_KEY",
   api: "openai-completions",
