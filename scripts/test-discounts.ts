@@ -664,8 +664,8 @@ for (const m of testModels) {
 // 16d: Active model gets → prefix and bold
 fgLog.length = 0;
 const activeTable = formatModelsTable(testModels, "a", testCtx as any);
-const activeLine = activeTable.find(r => r.startsWith("→"));
-assert(activeLine != null, "active model line has → prefix");
+const activeLine = activeTable.find(r => r.includes("→") && r.includes("Alpha"));
+assert(activeLine != null, "active model line includes → prefix");
 const boldHit = fgLog.find(c => c.color === "bold");
 assert(boldHit != null, "active model row uses bold color");
 assert(boldHit!.text.startsWith("→"), "bold-applied text includes → prefix");
@@ -673,7 +673,7 @@ assert(boldHit!.text.startsWith("→"), "bold-applied text includes → prefix")
 // 16e: Non-active model no → prefix
 const betaLine = activeTable.find(r => r.includes("Beta"));
 assert(betaLine != null, "Beta appears");
-assert(!betaLine.trimStart().startsWith("→"), "non-active Beta has no →");
+assert(!betaLine!.includes("→"), "non-active Beta has no →");
 
 // 16f: Zero costs display as —
 const gammaLine = table.find(r => r.includes("Gamma"));
@@ -703,11 +703,9 @@ assert(alphaLine!.includes("262K"), "262144 → 262K");
 assert(betaLine!.includes("128K"), "128000 → 128K");
 assert(gammaLine!.includes("4K"), "4096 → 4K");
 
-// 16l: Footer counts
-const footer = table[table.length - 1];
-assert(footer.includes("3 models"), "footer shows model count");
-const activeFooter = activeTable[activeTable.length - 1];
-assert(activeFooter.includes("→ active"), "active footer shows → active");
+// 16l: All rows are present and countable
+assert(table.length === 4, "3 models → 4 lines (1 header + 3 rows)");
+assert(activeTable.length === 4, "active table same row count as non-active");
 
 // ─── Cleanup ──────────────────────────────────────────────────────────────────
 
