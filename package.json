@@ -1,0 +1,41 @@
+{
+  "name": "omp-lilac-provider",
+  "version": "1.0.0",
+  "description": "Lilac provider plugin for OMP — Access Kimi K2.6, GLM 5.1, Gemma 4, and MiniMax M2.7 models through Lilac's OpenAI-compatible API on idle GPUs",
+  "type": "module",
+  "main": "index.ts",
+  "scripts": {
+    "clean": "echo 'nothing to clean'",
+    "build": "echo 'nothing to build'",
+    "check": "echo 'nothing to check'",
+    "test": "node scripts/test-discounts.ts",
+    "update-models": "node scripts/update-models.js"
+  },
+  "keywords": [
+    "omp",
+    "plugin",
+    "provider",
+    "lilac",
+    "ai",
+    "llm",
+    "kimi",
+    "glm",
+    "gemma",
+    "idle-gpu"
+  ],
+  "author": "Ryan Brosas <ryanbrosas32834@outlook.com>",
+  "license": "MIT",
+  "files": [
+    "index.ts",
+    "models.json",
+    "custom-models.json",
+    "patch.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "omp": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}
