@@ -16,6 +16,8 @@ declare module "@oh-my-pi/pi-coding-agent" {
   /** UI surface available via ctx.ui */
   interface UIApi {
     setStatus(key: string, text: string | undefined): void;
+    setWidget(key: string, lines: string[]): void;
+    notify(text: string, type?: string): void;
     theme: ThemeAPI;
   }
 
@@ -95,6 +97,14 @@ declare module "@oh-my-pi/pi-coding-agent" {
     model?: ModelInfo;
   }
 
+  /** Context passed to command handler */
+  interface ExtensionCommandContext {
+    model?: ModelInfo;
+    ui: UIApi;
+    waitForIdle?(): Promise<void>;
+    [key: string]: unknown;
+  }
+
   /** Context passed to model_select handler */
   interface ModelSelectContext {
     ui: UIApi;
@@ -148,7 +158,7 @@ declare module "@oh-my-pi/pi-coding-agent" {
       handler: ((...args: any[]) => unknown)
     ): void;
     setStatus(key: string, text: string | undefined): void;
-    registerCommand(name: string, handler: (...args: any[]) => unknown): void;
+    registerCommand(name: string, config: { description?: string; handler: (args: unknown, ctx: ExtensionCommandContext) => void }): void;
     setHiddenThinkingLabel(label: string): void;
     setLabel(key: string, text: string): void;
     appendEntry(customType: string, data?: unknown): void;
@@ -175,5 +185,6 @@ declare module "@oh-my-pi/pi-coding-agent" {
     MessageEndEvent,
     MessageEndContext,
     MessageEndResult,
+    ExtensionCommandContext,
   };
 }

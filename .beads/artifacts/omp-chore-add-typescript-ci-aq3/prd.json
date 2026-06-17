@@ -1,0 +1,50 @@
+{
+  "bead_id": "omp-chore-add-typescript-ci-aq3",
+  "type": "chore",
+  "priority": 2,
+  "estimate_minutes": 60,
+  "requirements": [
+    {
+      "id": 1,
+      "text": "tsconfig.json with strict mode",
+      "priority": "MUST",
+      "acceptance": "tsc --noEmit exits 0 with no errors"
+    },
+    {
+      "id": 2,
+      "text": "typecheck package.json script",
+      "priority": "MUST",
+      "acceptance": "npm run typecheck runs tsc"
+    },
+    {
+      "id": 3,
+      "text": "Fix all strict-mode type errors",
+      "priority": "MUST",
+      "acceptance": "Zero type errors in index.ts, scripts/*"
+    },
+    {
+      "id": 4,
+      "text": "CI workflow on push/PR",
+      "priority": "MUST",
+      "acceptance": ".github/workflows/ci.yml runs typecheck + tests"
+    },
+    {
+      "id": 5,
+      "text": "CI runs on Node 22+",
+      "priority": "MUST",
+      "acceptance": "Uses actions/setup-node with node 22"
+    },
+    {
+      "id": 6,
+      "text": "Tests pass in CI",
+      "priority": "MUST",
+      "acceptance": "node scripts/test-discounts.ts exits 0"
+    }
+  ],
+  "success_criteria": [
+    "npm run typecheck passes (zero errors)",
+    "All 12 E2E tests pass",
+    "CI workflow triggers on push and passes",
+    "No regressions in provider behavior"
+  ]
+}

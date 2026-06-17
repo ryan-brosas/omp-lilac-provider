@@ -46,6 +46,7 @@ const {
   applyDiscounts,
   loadCachedDiscounts,
   cacheDiscounts,
+  formatModelsTable,
 } = await import("../index.ts");
 
 function assert(condition: boolean, message: string) {
@@ -191,6 +192,9 @@ const providers: any[] = [];
 const handlers = new Map<string, ((...args: any[]) => void | Promise<void>)[]>();
 const statuses = new Map<string, string | undefined>();
 const appendedEntries: { customType: string; data: any }[] = [];
+const commands = new Map<string, { description?: string; handler: (...args: any[]) => void }>();
+const widgets = new Map<string, string[]>();
+const notifications: { text: string; type?: string }[] = [];
 
 const mockTheme = {
   fg: (_color: string, text: string) => text, // strip theme for easy assertions
@@ -199,6 +203,12 @@ const mockTheme = {
 const mockUi = {
   setStatus: (key: string, text: string | undefined) => {
     statuses.set(key, text);
+  },
+  setWidget: (key: string, lines: string[]) => {
+    widgets.set(key, lines);
+  },
+  notify: (text: string, type?: string) => {
+    notifications.push({ text, type });
   },
   theme: mockTheme,
 };
@@ -212,7 +222,9 @@ const mockApi: ExtensionAPI = {
     handlers.get(event)!.push(handler);
   },
   setStatus: mockUi.setStatus,
-  registerCommand: () => {},
+  registerCommand: (name: string, config: any) => {
+    commands.set(name, typeof config === "function" ? { handler: config } : config);
+  },
   setHiddenThinkingLabel: () => {},
   setLabel: () => {},
   appendEntry: (customType: string, data?: any) => {
@@ -448,38 +460,31 @@ assert(JSON.stringify(modelIdsAfterSecond) === JSON.stringify(modelIdsAfterSignu
 const kimiFinal = afterSecond.config.models.find((m: any) => m.id === "moonshotai/kimi-k2.6");
 assert(kimiFinal.discount.discountPercent === 25, "final registration uses correct discount (not stale from first re-register)");
 assert(kimiFinal.cost.input === 0.525, "final registration uses correct cost (0.70 * 0.75)");
-// ─── Test 12: oauth login flow (/login lilac) ───────────────────────────────
+// ─── Test 12: API-key login flow (/login lilac) ──────────────────────────────
 
-console.log("\n--- Test 12: oauth login flow ---");
+console.log("\n--- Test 12: API-key login flow ---");
 
 // The oauth block should be present on the initial provider registration.
+// OMP's login API accepts a string return value for API-key providers; AuthStorage
+// then replaces stale provider credentials instead of appending another OAuth row.
 const oauthProvider = providers[0]?.config?.oauth;
 assert(oauthProvider != null, "oauth block present on initial registration");
 assert(oauthProvider.name === "Lilac", "oauth.name is 'Lilac'");
 assert(typeof oauthProvider.login === "function", "oauth.login is a function");
-assert(typeof oauthProvider.refreshToken === "function", "oauth.refreshToken is a function");
-assert(typeof oauthProvider.getApiKey === "function", "oauth.getApiKey is a function");
+assert(oauthProvider.refreshToken === undefined, "oauth.refreshToken is omitted for API-key login");
+assert(oauthProvider.getApiKey === undefined, "oauth.getApiKey is omitted for API-key login");
 
-// loginLilac validates against POST /chat/completions then returns static credentials.
+// loginLilac validates against POST /chat/completions then returns the raw key.
 globalThis.fetch = mockFetch({
   "/chat/completions": { status: 200, body: { id: "chatcmpl-test", choices: [{ message: { role: "assistant", content: "ok" } }] } },
 });
 
 const enteredKey = "test-lilac-key-123";
-const creds = await oauthProvider.login({
+const storedKey = await oauthProvider.login({
   onPrompt: async () => enteredKey,
   signal: undefined as any,
 });
-assert(creds.access === enteredKey, "credentials.access equals the entered key");
-assert(creds.refresh === enteredKey, "credentials.refresh equals the entered key");
-assert(creds.expires === 4102444800000, "credentials.expires is the far-future sentinel");
-
-// getApiKey extracts the key omp will send as Bearer.
-assert(oauthProvider.getApiKey(creds) === enteredKey, "getApiKey returns the access token");
-
-// refreshToken is a no-op pass-through (static keys don't expire).
-const refreshed = await oauthProvider.refreshToken(creds);
-assert(refreshed.access === enteredKey, "refreshToken returns the same credentials");
+assert(storedKey === enteredKey, "login returns the raw API key for AuthStorage");
 
 // Empty key is rejected before any network call.
 let emptyRejected = false;
@@ -504,6 +509,206 @@ assert(badKeyRejected, "rejected key (401) throws");
 assert(badKeyMessage.includes("bad key"), "error message includes server message");
 
 globalThis.fetch = originalFetch;
+
+// ─── Test 13: /lilac-models command registration ──────────────────────────────
+
+console.log("\n--- Test 13: /lilac-models command registration ---");
+
+// Command should have been registered during registerLilac() call
+const lilacModelsCmd = commands.get("lilac-models");
+assert(lilacModelsCmd != null, "/lilac-models command is registered");
+assert(typeof lilacModelsCmd!.handler === "function", "command handler is a function");
+assert(typeof lilacModelsCmd!.description === "string", "command has a description");
+assert(lilacModelsCmd!.description!.length > 0, "command description is non-empty");
+
+// ─── Test 14: /lilac-models command handler output ────────────────────────────
+
+console.log("\n--- Test 14: /lilac-models command handler output ---");
+
+// Invoke the command handler with a Lilac model active
+widgets.clear();
+notifications.length = 0;
+await lilacModelsCmd!.handler(
+  {},
+  {
+    model: { id: "moonshotai/kimi-k2.6", provider: "lilac" },
+    ui: mockUi,
+  },
+);
+
+const widgetLines = widgets.get("lilac-models");
+assert(widgetLines != null, "setWidget was called with lilac-models key");
+assert(widgetLines!.length >= 2, "widget has header + at least one model row");
+assert(widgetLines![0].includes("Model"), "header row contains Model column");
+assert(widgetLines![0].includes("Input"), "header row contains Input column");
+assert(widgetLines![0].includes("Output"), "header row contains Output column");
+assert(widgetLines![0].includes("Supply"), "header row contains Supply column");
+assert(widgetLines![0].includes("Disc%"), "header row contains Disc% column");
+assert(widgetLines![0].includes("Vis"), "header row contains Vis column");
+assert(widgetLines![0].includes("Context"), "header row contains Context column");
+
+// Active model (kimi) should have → prefix
+const activeRow = widgetLines!.slice(1).find((l: string) => l.includes("→"));
+assert(activeRow != null, "active model row has → prefix");
+assert(activeRow!.includes("Kimi"), "active model row contains model name");
+
+// All models from the provider should appear
+for (const modelId of ["moonshotai/kimi-k2.6", "zai-org/glm-5.1", "google/gemma-4-31b-it", "minimaxai/minimax-m2.7"]) {
+  const found = widgetLines!.some((l: string) => l.includes(modelId) || l.includes(l.replace(/.*\//, "")));
+  // Models display their name field, not ID — check by looking for known names
+}
+const hasKimi = widgetLines!.some((l: string) => l.includes("Kimi"));
+const hasGlm = widgetLines!.some((l: string) => l.includes("GLM"));
+const hasGemma = widgetLines!.some((l: string) => l.includes("Gemma"));
+const hasMiniMax = widgetLines!.some((l: string) => l.includes("MiniMax"));
+assert(hasKimi, "Kimi K2.6 appears in table");
+assert(hasGlm, "GLM 5.1 appears in table");
+assert(hasGemma, "Gemma 4 appears in table");
+assert(hasMiniMax, "MiniMax M2.7 appears in table");
+
+// Active model is Kimi — only one row should have →
+const activeCount = widgetLines!.filter((l: string) => l.includes("→")).length;
+assert(activeCount === 1, "exactly one model row has active indicator");
+
+// Invoke with a non-Lilac model — no model should be highlighted
+widgets.clear();
+await lilacModelsCmd!.handler(
+  {},
+  {
+    model: { id: "claude-sonnet-4", provider: "anthropic" },
+    ui: mockUi,
+  },
+);
+const widgetLines2 = widgets.get("lilac-models");
+assert(widgetLines2 != null, "widget produced for non-Lilac active model");
+const activeCount2 = widgetLines2!.filter((l: string) => l.includes("→")).length;
+assert(activeCount2 === 0, "no model highlighted when non-Lilac model is active");
+
+// ─── Test 15: /lilac models input alias ──────────────────────────────────────
+
+console.log("\n--- Test 15: /lilac models input alias ---");
+
+const inputHandlers = handlers.get("input");
+assert(inputHandlers != null && inputHandlers.length > 0, "input event handler registered for alias");
+
+// Test that the alias handler transforms "/lilac models" → "/lilac-models"
+const aliasHandler = inputHandlers![0] as (...args: any[]) => any;
+const result1 = aliasHandler("/lilac models");
+assert(result1 === "/lilac-models", "'/lilac models' transforms to '/lilac-models'");
+
+// Test that "/lilac-models" passes through unchanged
+const result2 = aliasHandler("/lilac-models");
+assert(result2 === "/lilac-models", "'/lilac-models' passes through unchanged");
+
+// Test that other input is untouched
+const result3 = aliasHandler("hello world");
+assert(result3 === "hello world", "unrelated input passes through unchanged");
+
+// Test object form of input
+const result4: any = aliasHandler({ text: "/lilac models please" });
+// Handler returns the transformed text, OMP will handle the rest
+assert(typeof result4 === "string" && (result4 as string).includes("/lilac-models"), "object input with /lilac models triggers alias");
+
+// ─── Test 16: formatModelsTable unit tests ───────────────────────────────────
+
+console.log("\n--- Test 16: formatModelsTable unit ---");
+
+const fgLog: { color: string; text: string }[] = [];
+const testCtx = {
+  ui: {
+    theme: {
+      fg: (color: string, text: string) => { fgLog.push({ color, text }); return `<${color}>${text}</${color}>`; },
+    },
+  },
+};
+
+const testModels: any[] = [
+  {
+    id: "a", name: "Alpha", reasoning: true, input: ["text", "image"],
+    cost: { input: 0.50, output: 2.00, cacheRead: 0.10, cacheWrite: 0 },
+    contextWindow: 262144, maxTokens: 262144,
+    discount: { supplyState: "healthy", discountPercent: 25, creditMultiplier: 0.75 },
+  },
+  {
+    id: "b", name: "Beta", reasoning: false, input: ["text"],
+    cost: { input: 0.30, output: 1.00, cacheRead: 0, cacheWrite: 0 },
+    contextWindow: 128000, maxTokens: 128000,
+    discount: { supplyState: "low", discountPercent: 0, creditMultiplier: 1.00 },
+  },
+  {
+    id: "c", name: "Gamma", reasoning: false, input: ["text"],
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    contextWindow: 4096, maxTokens: 4096,
+    // No discount field — supply defaults to unknown
+  },
+];
+
+// 16a: Empty models → header-only (no model rows); command handler owns the "no models" notification
+fgLog.length = 0;
+const emptyOut = formatModelsTable([], undefined, testCtx as any);
+assert(emptyOut.length === 1, "empty list returns header-only (1 line)");
+assert(emptyOut[0].includes("Model"), "header row present even for empty models");
+
+// 16b: Table has header + one row per model
+fgLog.length = 0;
+const table = formatModelsTable(testModels, undefined, testCtx as any);
+assert(table.length === 1 + testModels.length, "header + one row per model");
+const dimCalls = fgLog.filter(c => c.color === "dim");
+assert(dimCalls.length >= 1, "at least header is dimmed");
+
+// 16c: All model names appear
+for (const m of testModels) {
+  assert(table.some(row => row.includes(m.name)), `model "${m.name}" in table`);
+}
+
+// 16d: Active model gets → prefix and bold
+fgLog.length = 0;
+const activeTable = formatModelsTable(testModels, "a", testCtx as any);
+const activeLine = activeTable.find(r => r.startsWith("→"));
+assert(activeLine != null, "active model line has → prefix");
+const boldHit = fgLog.find(c => c.color === "bold");
+assert(boldHit != null, "active model row uses bold color");
+assert(boldHit!.text.startsWith("→"), "bold-applied text includes → prefix");
+
+// 16e: Non-active model no → prefix
+const betaLine = activeTable.find(r => r.includes("Beta"));
+assert(betaLine != null, "Beta appears");
+assert(!betaLine.trimStart().startsWith("→"), "non-active Beta has no →");
+
+// 16f: Zero costs display as —
+const gammaLine = table.find(r => r.includes("Gamma"));
+assert(gammaLine != null, "Gamma appears");
+assert(gammaLine!.includes("—"), "zero-cost model shows —");
+
+// 16g: Non-zero costs display with $
+const alphaLine = table.find(r => r.includes("Alpha"));
+assert(alphaLine != null, "Alpha appears");
+assert(alphaLine!.includes("$"), "cost-bearing model shows $");
+
+// 16h: Supply state labels
+assert(alphaLine!.includes("healthy"), "healthy supply displayed");
+assert(betaLine!.includes("low"), "low supply displayed");
+assert(gammaLine!.includes("unknown"), "missing discount → unknown supply");
+
+// 16i: Discount percentage
+assert(alphaLine!.includes("25%"), "25% discount shown");
+assert(betaLine!.includes("0%"), "0% discount shown");
+
+// 16j: Vision indicator
+assert(alphaLine!.includes("✓"), "image-input model shows ✓");
+assert(betaLine!.includes("—"), "text-only model shows vision dash");
+
+// 16k: Context window formatting
+assert(alphaLine!.includes("262K"), "262144 → 262K");
+assert(betaLine!.includes("128K"), "128000 → 128K");
+assert(gammaLine!.includes("4K"), "4096 → 4K");
+
+// 16l: Footer counts
+const footer = table[table.length - 1];
+assert(footer.includes("3 models"), "footer shows model count");
+const activeFooter = activeTable[activeTable.length - 1];
+assert(activeFooter.includes("→ active"), "active footer shows → active");
+
 // ─── Cleanup ──────────────────────────────────────────────────────────────────
 
 globalThis.fetch = originalFetch;

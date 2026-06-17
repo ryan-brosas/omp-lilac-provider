@@ -62,7 +62,7 @@ That's it. Lilac models now appear in `/model`. No `-e` flag, no manual clone, n
 
 ## API key
 
-`/login lilac` prompts for your Lilac API key, validates it against `GET /v1/models`, and stores it. Or set it explicitly:
+`/login lilac` prompts for your Lilac API key, validates it against Lilac's authenticated chat-completions endpoint, and stores it. Or set it explicitly:
 
 ```bash
 export LILAC_API_KEY=your-api-key

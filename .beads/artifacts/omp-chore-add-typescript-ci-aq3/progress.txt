@@ -1,0 +1,4 @@
+[2026-06-18] Bead created: omp-chore-add-typescript-ci-aq3
+[2026-06-18] Wave 1 complete: tsconfig.json + type fixes + types.d.ts
+[2026-06-18] Wave 2 complete: .github/workflows/ci.yml created
+[2026-06-18] Verification: tsc --noEmit=0 errors, 12/12 tests pass, npm run typecheck pass, npm test pass

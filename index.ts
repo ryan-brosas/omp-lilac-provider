@@ -237,23 +237,9 @@ const envApiKey = resolveLilacApiKey();
 
 // ─── OAuth (/login support) ──────────────────────────────────────────────────
 
-interface LilacOAuthCredentials {
-  refresh: string;
-  access: string;
-  expires: number;
-}
-
 interface LilacLoginCallbacks {
   onPrompt(prompt: { message: string; placeholder?: string; allowEmpty?: boolean }): Promise<string>;
   signal?: AbortSignal;
-}
-
-function makeStaticCredentials(apiKey: string): LilacOAuthCredentials {
-  return {
-    refresh: apiKey,
-    access: apiKey,
-    expires: 4102444800000,
-  };
 }
 
 async function validateLilacApiKey(apiKey: string, signal?: AbortSignal): Promise<void> {
@@ -285,7 +271,7 @@ async function validateLilacApiKey(apiKey: string, signal?: AbortSignal): Promis
   throw new Error(message);
 }
 
-async function loginLilac(callbacks: LilacLoginCallbacks): Promise<LilacOAuthCredentials> {
+async function loginLilac(callbacks: LilacLoginCallbacks): Promise<string> {
   const apiKey = (
     await callbacks.onPrompt({
       message: "Enter Lilac API key:",
@@ -295,18 +281,12 @@ async function loginLilac(callbacks: LilacLoginCallbacks): Promise<LilacOAuthCre
   ).trim();
   if (!apiKey) throw new Error("Lilac API key is required");
   await validateLilacApiKey(apiKey, callbacks.signal);
-  return makeStaticCredentials(apiKey);
+  return apiKey;
 }
 
 const lilacOauth = {
   name: "Lilac",
   login: loginLilac,
-  async refreshToken(credentials: LilacOAuthCredentials): Promise<LilacOAuthCredentials> {
-    return credentials;
-  },
-  getApiKey(credentials: LilacOAuthCredentials): string {
-    return credentials.access;
-  },
 };
 
 /** Raw model shape returned by Lilac /v1/models API. */
@@ -539,6 +519,89 @@ function dimStatus(ctx: { ui: { theme: { fg: (color: string, text: string) => st
   }
 }
 
+/** Format context window size for display (e.g. 262144 → "256K") */
+function formatContext(window: number): string {
+  if (window >= 1000) return `${Math.round(window / 1000)}K`;
+  return `${window}`;
+}
+
+/**
+ * Build a formatted multi-line model table for display via setWidget.
+ *
+ * Columns: Name, Input $/M, Output $/M, Cache $/M, Supply, Disc%, Vision, Context
+ * The active model row is prefixed with "→" and rendered in a highlight color.
+ */
+function formatModelsTable(
+  models: JsonModel[],
+  activeModelId: string | undefined,
+  ctx: { ui: { theme: { fg: (color: string, text: string) => string } } },
+): string[] {
+  // Column widths
+  const NAME_W = 17;
+  const IN_W = 10;
+  const OUT_W = 11;
+  const CACHE_W = 9;
+  const SUPPLY_W = 9;
+  const DISC_W = 6;
+  const VIS_W = 4;
+  const CTX_W = 8;
+
+  const dim = (text: string) => {
+    try { return ctx.ui.theme.fg("dim", text); } catch { return text; }
+  };
+
+  const header = [
+    "Model".padEnd(NAME_W),
+    "Input $/M".padStart(IN_W),
+    "Output $/M".padStart(OUT_W),
+    "Cache $/M".padStart(CACHE_W),
+    "Supply".padStart(SUPPLY_W),
+    "Disc%".padStart(DISC_W),
+    "Vis".padStart(VIS_W),
+    "Context".padStart(CTX_W),
+  ].join("");
+
+  const lines: string[] = [dim(header)];
+
+  for (const model of models) {
+    const isActive = model.id === activeModelId;
+    const prefix = isActive ? "→ " : "  ";
+
+    const name = (prefix + (model.name || model.id)).padEnd(NAME_W).substring(0, NAME_W);
+
+    const inCost = model.cost.input > 0 ? `$${model.cost.input.toFixed(2)}` : "—";
+    const outCost = model.cost.output > 0 ? `$${model.cost.output.toFixed(2)}` : "—";
+    const cacheCost = model.cost.cacheRead > 0 ? `$${model.cost.cacheRead.toFixed(2)}` : "—";
+    const supply = model.discount?.supplyState ?? "unknown";
+    const discPct = model.discount ? `${model.discount.discountPercent}%` : "—";
+    const vision = (model.input && model.input.includes("image")) ? "✓" : "—";
+    const ctxStr = formatContext(model.contextWindow);
+
+    const row = [
+      name.padEnd(NAME_W),
+      inCost.padStart(IN_W),
+      outCost.padStart(OUT_W),
+      cacheCost.padStart(CACHE_W),
+      supply.padStart(SUPPLY_W),
+      discPct.padStart(DISC_W),
+      vision.padStart(VIS_W),
+      ctxStr.padStart(CTX_W),
+    ].join("");
+
+    if (isActive) {
+      try {
+        lines.push(ctx.ui.theme.fg("bold", row));
+      } catch {
+        lines.push(row);
+      }
+    } else {
+      lines.push(row);
+    }
+  }
+
+  return lines;
+}
+
 function discountsChanged(
   a: Map<string, JsonDiscount> | null,
   b: Map<string, JsonDiscount> | null,
@@ -563,6 +626,7 @@ let cachedApiKey: string | undefined;
 let revalidateAbort: AbortController | null = null;
 let latestDiscounts: Map<string, JsonDiscount> | null = null;
 let lastDiscountFetchTime = 0;
+let latestModels: JsonModel[] = [];
 const STATUS_CACHE_TTL_MS = 30000;
 
 async function resolveApiKey(modelRegistry: ModelRegistry): Promise<void> {
@@ -579,6 +643,7 @@ export default function (pi: ExtensionAPI) {
   latestDiscounts = loadCachedDiscounts();
   const staleModels = applyDiscounts(buildModels(staleBase, customModels, patches), latestDiscounts);
 
+  latestModels = staleModels;
   pi.registerProvider("lilac", {
     name: "Lilac",
     baseUrl: BASE_URL,
@@ -644,21 +709,23 @@ export default function (pi: ExtensionAPI) {
 
         if (liveModels && liveModels.length > 0) {
           const merged = mergeWithEmbedded(liveModels, embeddedModels);
+          latestModels = applyDiscounts(buildModels(merged, customModels, patches), latestDiscounts);
           pi.registerProvider("lilac", {
             name: "Lilac",
             baseUrl: BASE_URL,
             ...(envApiKey ? { apiKey: envApiKey } : {}),
             api: "openai-completions",
-            models: applyDiscounts(buildModels(merged, customModels, patches), latestDiscounts),
+            models: latestModels,
             oauth: lilacOauth,
           });
         } else if (discounts) {
+          latestModels = applyDiscounts(buildModels(staleBase, customModels, patches), latestDiscounts);
           pi.registerProvider("lilac", {
             name: "Lilac",
             baseUrl: BASE_URL,
             ...(envApiKey ? { apiKey: envApiKey } : {}),
             api: "openai-completions",
-            models: applyDiscounts(buildModels(staleBase, customModels, patches), latestDiscounts),
+            models: latestModels,
             oauth: lilacOauth,
           });
         }
@@ -708,12 +775,13 @@ export default function (pi: ExtensionAPI) {
     latestDiscounts = discounts;
 
     const base = loadStaleModels(embeddedModels);
+    latestModels = applyDiscounts(buildModels(base, customModels, patches), discounts);
     pi.registerProvider("lilac", {
       name: "Lilac",
       baseUrl: BASE_URL,
       ...(envApiKey ? { apiKey: envApiKey } : {}),
       api: "openai-completions",
-      models: applyDiscounts(buildModels(base, customModels, patches), discounts),
+      models: latestModels,
       oauth: lilacOauth,
     });
     ctx.ui.setStatus("lilac", dimStatus(ctx, formatDiscountStatus(ctx.model.id)));
@@ -766,10 +834,44 @@ export default function (pi: ExtensionAPI) {
     };
   });
 
+  // ─── /lilac-models command ────────────────────────────────────────────────
+
+  pi.registerCommand("lilac-models", {
+    description: "Browse all Lilac models with pricing, supply, and capabilities",
+    handler: (_args: unknown, ctx) => {
+      if (latestModels.length === 0) {
+        ctx.ui.notify("No Lilac models available yet — please wait for provider initialization", "warn");
+        return;
+      }
+
+      const activeId = ctx.model?.provider === "lilac" ? ctx.model.id : undefined;
+      const lines = formatModelsTable(latestModels, activeId, ctx as { ui: { theme: { fg: (color: string, text: string) => string } } });
+
+      try {
+        ctx.ui.setWidget("lilac-models", lines);
+      } catch {
+        // Fallback: display as multi-line notification if setWidget is unavailable
+        const joined = lines.join("\n");
+        ctx.ui.notify(joined, "info");
+      }
+    },
+  });
+
+  // Alias: /lilac models → same handler (if OMP runtime supports input events)
+  pi.on("input", (input: unknown) => {
+    const text = typeof input === "string" ? input : (input as { text?: string })?.text;
+    if (text && /^\/lilac\s+models\b/i.test(text)) {
+      // OMP will process /lilac-models command if we transform the input.
+      // The input event fires before command resolution — return transformed text.
+      return text.replace(/^\/lilac\s+models\b/i, "/lilac-models");
+    }
+    return input;
+  });
+
   pi.on("session_shutdown", () => {
     revalidateAbort?.abort();
   });
 }
 
-export { fetchStatusDiscounts, applyDiscounts, loadCachedDiscounts, cacheDiscounts };
+export { fetchStatusDiscounts, applyDiscounts, loadCachedDiscounts, cacheDiscounts, formatModelsTable };
 export type { JsonDiscount, JsonModel, PatchEntry, PatchData };

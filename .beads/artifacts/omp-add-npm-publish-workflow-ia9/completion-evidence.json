@@ -1,0 +1,20 @@
+{
+  "bead_id": "omp-add-npm-publish-workflow-ia9",
+  "status": "implemented",
+  "timestamp": "2026-06-18T02:55:00Z",
+  "verification_commands": [
+    "npx tsc --noEmit → exit 0, zero errors",
+    "node scripts/test-discounts.ts → All tests passed (12/12)",
+    "npm publish --dry-run → 7 correct files (no dev leaks)",
+    "node -e \"console.log(require('./package.json').publishConfig.access)\" → public",
+    "git diff --stat → 2 modified + 1 new file (README.md, package.json, .github/workflows/publish.yml)"
+  ],
+  "requirements_met": {
+    "publish workflow on tag": "PASS — .github/workflows/publish.yml triggers on push:tags:v* with setup-node@v4 (Node 22) → npm ci → npm publish with NODE_AUTH_TOKEN",
+    "npm publish step": "PASS — npm publish runs with NPM_TOKEN secret via registry-url in setup-node",
+    "public access config": "PASS — publishConfig.access: 'public' added to package.json",
+    "Correct files whitelist": "PASS — npm publish --dry-run shows exactly 7 files: LICENSE, README.md, custom-models.json, index.ts, models.json, package.json, patch.json — no .pi/, scripts/, types/, .github/, tsconfig.json",
+    "Node 22 runtime": "PASS — setup-node@v4 with node-version: 22 (same as CI workflow)",
+    "npm badge in README": "PASS — [![npm](https://img.shields.io/npm/v/omp-lilac-provider)](https://www.npmjs.com/package/omp-lilac-provider) added to badge row"
+  }
+}

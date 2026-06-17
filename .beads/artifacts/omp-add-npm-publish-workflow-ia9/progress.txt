@@ -1,0 +1,2 @@
+[2026-06-18] Bead created: omp-add-npm-publish-workflow-ia9
+[2026-06-18] PRD, plan, tasks, decisions written. Bead is planned — ready for /ship.

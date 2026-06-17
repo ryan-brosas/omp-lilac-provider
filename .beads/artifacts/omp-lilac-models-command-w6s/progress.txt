@@ -1,3 +1,7 @@
 [2026-06-18] Bead created: omp-lilac-models-command-w6s
 [2026-06-18] PRD written: /lilac models slash command with supply-aware model browser
 [2026-06-18] Decisions documented: widget display, command naming, module-level model storage
+[2026-06-18] Wave 1 complete: type declarations (setWidget, notify, ExtensionCommandContext), model store (latestModels updated at 4 registerProvider sites)
+[2026-06-18] Wave 2 complete: formatModelsTable, formatContext helpers; /lilac-models command + /lilac models alias via input interception
+[2026-06-18] Wave 3 complete: 3 new tests (13-15), 15/15 pass; npx tsc --noEmit clean; node import check clean
+[2026-06-18] COMPLETED: All 9 requirements met. Bead ready for close.

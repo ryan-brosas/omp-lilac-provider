@@ -1,0 +1,44 @@
+{
+  "bead_id": "omp-add-npm-publish-workflow-ia9",
+  "type": "chore",
+  "priority": 1,
+  "estimate_minutes": 30,
+  "requirements": [
+    {
+      "id": 1,
+      "text": "publish workflow on tag",
+      "priority": "MUST",
+      "acceptance": "Push v* tag triggers workflow"
+    },
+    {
+      "id": 2,
+      "text": "npm publish step",
+      "priority": "MUST",
+      "acceptance": "npm publish runs with NPM_TOKEN"
+    },
+    {
+      "id": 3,
+      "text": "public access config",
+      "priority": "MUST",
+      "acceptance": "publishConfig.access: 'public' in package.json"
+    },
+    {
+      "id": 4,
+      "text": "Correct files whitelist",
+      "priority": "SHOULD",
+      "acceptance": "Only provider files published; .pi/, scripts, types excluded"
+    },
+    {
+      "id": 5,
+      "text": "Node 22 runtime",
+      "priority": "SHOULD",
+      "acceptance": "Uses same Node version as CI workflow"
+    }
+  ],
+  "success_criteria": [
+    "Push a v* tag triggers the publish workflow",
+    "npm publish --dry-run shows only the 6 whitelisted files",
+    "publishConfig.access is 'public' in package.json",
+    "Workflow YAML is valid"
+  ]
+}
